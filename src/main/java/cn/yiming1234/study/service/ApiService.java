@@ -87,17 +87,15 @@ public class ApiService {
         return webClient.get()
                 .uri("https://pc-api.xuexi.cn/login/secure_check?code=" + loginTmpCode + "&state=" + UUID.randomUUID())
                 .retrieve()
-                .toBodilessEntity()  // 不需要处理响应体
+                .toBodilessEntity()
                 .flatMap(responseEntity -> {
-                    // 获取响应头中的 "Set-Cookie"
                     List<String> cookies = responseEntity.getHeaders().get("Set-Cookie");
                     if (cookies != null && !cookies.isEmpty()) {
-                        // 提取 token
                         for (String cookie : cookies) {
                             if (cookie.startsWith("token=")) {
                                 String token = cookie.substring("token=".length(), cookie.indexOf(";"));
                                 log.info("token: {}", token);
-                                return Mono.justOrEmpty(token);  // 返回提取的 token
+                                return Mono.justOrEmpty(token);
                             }
                         }
                     }
