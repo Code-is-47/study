@@ -1,8 +1,6 @@
 package cn.yiming1234.study.service;
 
 import cn.yiming1234.study.util.MailUtil;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import lombok.extern.slf4j.Slf4j;
@@ -107,4 +105,62 @@ public class ApiService {
                 });
     }
 
+    /**
+     * 发送GET请求获取总积分
+     */
+    public Mono<String> getTotalScore(String token) {
+        return webClient.get()
+                .uri("https://pc-proxy-api.xuexi.cn/delegate/score/get")
+                .header("Cookie", "token=" + token)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .flatMap(responseMap -> {
+                    Integer code = (Integer) responseMap.get("code");
+                    if (code != null && code == 200) {
+                        Map<String, Object> data = (Map<String, Object>) responseMap.get("data");
+                        if (data != null) {
+                            Double score = (Double) data.get("score");
+                            log.info("目前总分: {}", score);
+                            return Mono.justOrEmpty(String.valueOf(score));
+                        }
+                    }
+                    return Mono.error(new RuntimeException("Error retrieving total score"));
+                });
+    }
+
+    /**
+     * 发送GET请求获取今日积分
+     */
+    public Mono<String> getTodayScore(String token) {
+        return webClient.get()
+                .uri("https://pc-proxy-api.xuexi.cn/delegate/score/days/listScoreProgress?sence=score&deviceType=2")
+                .header("Cookie", "token=" + token)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .flatMap(responseMap -> {
+                    Integer code = (Integer) responseMap.get("code");
+                    if (code != null && code == 200) {
+                        Map<String, Object> data = (Map<String, Object>) responseMap.get("data");
+                        if (data != null) {
+                            List<Map<String, Object>> taskProgress = (List<Map<String, Object>>) data.get("taskProgress");
+                            if (taskProgress != null) {
+                                StringBuilder result = new StringBuilder();
+                                for (Map<String, Object> task : taskProgress) {
+                                    String title = (String) task.get("title");
+                                    if ("我要选读文章".equals(title) || "我要视听学习".equals(title)) {
+                                        Integer currentScore = (Integer) task.get("currentScore");
+                                        Integer dayMaxScore = (Integer) task.get("dayMaxScore");
+                                        result.append(title).append(": ")
+                                                .append(currentScore).append("/")
+                                                .append(dayMaxScore).append("\n");
+                                    }
+                                }
+                                log.info("今日任务进度: \n{}", result.toString());
+                                return Mono.justOrEmpty(result.toString());
+                            }
+                        }
+                    }
+                    return Mono.error(new RuntimeException("Error retrieving today score"));
+                });
+    }
 }

@@ -1,8 +1,12 @@
 package cn.yiming1234.study.service;
 
+import cn.yiming1234.study.entity.Token;
+import cn.yiming1234.study.mapper.TokenMapper;
+import cn.yiming1234.study.util.MailUtil;
 import cn.yiming1234.study.util.QRCodeUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -24,6 +28,11 @@ public class MainService {
     private boolean loginSuccessful = false;
 
     @Autowired
+    private TokenMapper tokenMapper;
+    @Autowired
+    private MailUtil mailUtil;
+
+    @Autowired
     public MainService(ApiService apiService, View error) {
         this.apiService = apiService;
         this.error = error;
@@ -43,7 +52,7 @@ public class MainService {
                 return apiService.getToken(loginTmpCode).doOnNext(token -> {
                     log.info("获取token成功，token: {}", token);
                     deleteExistingFiles();
-                    // TODO 储存进数据库
+                    tokenMapper.insertToken(token, LocalDateTime.now().toString());
                 });
             }
             return Mono.empty();
@@ -108,16 +117,27 @@ public class MainService {
         }
     }
 
-//    @EventListener(ApplicationReadyEvent.class)
-//    @Scheduled(cron = "0 0 9 * * ?")
-//    public void mainService() {
-//        // TODO
-//        // 从数据库获取token
-//        // 请求测试，总积分，今日积分
-//        // 过期发送邮件
-//        // 没过期则直接使用
-//        // DailyService 服务1
-//        // DailyService 服务2
-//        // 完成每日任务发送邮件
-//    }
+    @EventListener(ApplicationReadyEvent.class)
+    @Scheduled(cron = "0 0 9 * * ?")
+    public void mainService() {
+        Token token = tokenMapper.selectLatestToken();
+        if (token != null) {
+            apiService.getTotalScore(token.getToken()).zipWith(apiService.getTodayScore(token.getToken()))
+                    .doOnNext(tuple -> {
+                        String totalScore = String.valueOf(tuple.getT1());
+                        String todayScore = String.valueOf(tuple.getT2());
+                        log.info("总积分: {}, 今日积分: {}", totalScore, todayScore);
+                    })
+                    .doOnError(e -> {
+                        log.error("获取积分时出错", e);
+                        mailUtil.sendMail("token过期，请重新登录");
+                    })
+                    .subscribe();
+        } else {
+            log.error("No token found in the database.");
+        }
+        // TODO
+    }
+    // 当数据库储存进新的token时，重新执行每日任务
+    // TODO
 }
