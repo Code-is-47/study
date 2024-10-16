@@ -31,6 +31,8 @@ public class MainService {
     private TokenMapper tokenMapper;
     @Autowired
     private MailUtil mailUtil;
+    @Autowired
+    private DailyService dailyService;
 
     @Autowired
     public MainService(ApiService apiService, View error) {
@@ -126,7 +128,6 @@ public class MainService {
                     .doOnNext(tuple -> {
                         String totalScore = String.valueOf(tuple.getT1());
                         String todayScore = String.valueOf(tuple.getT2());
-                        log.info("总积分: {}, 今日积分: {}", totalScore, todayScore);
                     })
                     .doOnError(e -> {
                         log.error("获取积分时出错", e);
@@ -136,8 +137,8 @@ public class MainService {
         } else {
             log.error("No token found in the database.");
         }
-        // TODO
+        dailyService.read();
     }
     // 当数据库储存进新的token时，重新执行每日任务
-    // TODO
+
 }

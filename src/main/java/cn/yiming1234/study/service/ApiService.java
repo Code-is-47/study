@@ -1,12 +1,17 @@
 package cn.yiming1234.study.service;
 
 import cn.yiming1234.study.util.MailUtil;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -163,4 +168,85 @@ public class ApiService {
                     return Mono.error(new RuntimeException("Error retrieving today score"));
                 });
     }
+
+    /**
+     * 发送GET请求获取头条新闻
+     */
+    public Mono<List<String>> getArticle() {
+        log.info("获取头条新闻");
+        return webClient.get()
+                .uri("https://www.xuexi.cn/lgdata/1crqb964p71.json")
+                .accept(MediaType.APPLICATION_JSON)
+                .retrieve()
+                .bodyToFlux(DataBuffer.class)
+                .reduce(DataBuffer::write)
+                .map(dataBuffer -> {
+                    //解决返回json过大的问题
+                    byte[] bytes = new byte[dataBuffer.readableByteCount()];
+                    dataBuffer.read(bytes);
+                    String responseBody = new String(bytes);
+
+                    List<String> urls = new ArrayList<>();
+                    try {
+                        ObjectMapper objectMapper = new ObjectMapper();
+                        JsonNode root = objectMapper.readTree(responseBody);
+                        if (root.isArray()) {
+                            for (JsonNode item : root) {
+                                if (item.has("url")) {
+                                    String url = item.get("url").asText();
+                                    urls.add(url);
+                                    if (urls.size() >= 5) {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    log.info("文章解析结果: {}", urls);
+                    return urls;
+                });
+    }
+
+    /**
+     * 发送GET请求获取第一频道视频
+     */
+    public Mono<List<String>> getVideo() {
+        log.info("获取第一频道");
+        return webClient.get()
+                .uri("https://www.xuexi.cn/lgdata/1novbsbi47k.json")
+                .accept(MediaType.APPLICATION_JSON)
+                .retrieve()
+                .bodyToFlux(DataBuffer.class)
+                .reduce(DataBuffer::write)
+                .map(dataBuffer -> {
+                    byte[] bytes = new byte[dataBuffer.readableByteCount()];
+                    dataBuffer.read(bytes);
+                    String responseBody = new String(bytes);
+
+                    List<String> urls = new ArrayList<>();
+                    try {
+                        ObjectMapper objectMapper = new ObjectMapper();
+                        JsonNode root = objectMapper.readTree(responseBody);
+                        if (root.isArray()) {
+                            for (JsonNode item : root) {
+                                if (item.has("url")) {
+                                    String url = item.get("url").asText();
+                                    urls.add(url);
+                                    if (urls.size() >= 5) {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    log.info("视频解析结果: {}", urls);
+                    return urls;
+                })
+                .doOnError(error -> log.info("获取第一频道失败", error));
+    }
+
 }
